@@ -1,0 +1,13 @@
+{
+  "name": "dcconbot",
+  "version": "0.0.1",
+  "description": "bot for use dccon is discord",
+  "main": "app.js",
+  "author": {
+    "name": "Saeori"
+  },
+  "dependencies": {
+    "discord.js": "^11.3.2",
+    "fs": "0.0.1-security"
+  }
+}
