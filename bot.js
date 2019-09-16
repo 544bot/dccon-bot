@@ -1,134 +1,76 @@
-﻿const Discord = require('discord.js');
+const Discord = require('discord.js');
 const fs = require('fs');
-const { prefix, token } = require('./config.json');
-const MAX_LENGTH = 500;
+const commands = require('./commands.js')
+const { suffix, suffix2, token } = require('./config.json');
+
 //봇 시작
 const bot = new Discord.Client();
+let botstopcount = 0;
+let countbasetime = 0;
+
 bot.on('ready', () => {
     console.log('봇 기동 확인');
-    bot.user.setActivity('!!목록')
+    bot.user.setActivity('콘목록')
 })
 
-let recentlist = 0;
-let listpage = -1;
-let print = [];
 //명령어들
-bot.on('message', msg => {
-    if (!msg.content.startsWith(prefix) || msg.author.bot) return;
 
-    const args = msg.content.slice(prefix.length).split(' ');
-    if (args[0] === '목록') {
-        let conlist = fs.readdirSync('./image');
-        let temptoken = null;
-        let templist = [];
-        let printlength = 6;
-        if (args.length === 1) {
-            msg.channel.send('콘 종류 목록입니다. 종류별로 사용가능한 콘은 !!목록 <콘종류>를 입력하세요');
-            print = [];
-            while (conlist.length !== 0) {
-                temptoken = conlist.shift();
-                if (printlength + temptoken.toString().length < MAX_LENGTH) {
-                    printlength += temptoken.toString().length + 2;
-                    templist.push(temptoken);
-                } else {
-                    print.push(templist);
-                    templist = [];
-                    printlength = 6;
-                    printlength += temptoken.toString().length + 2;
-                    templist.push(temptoken);
-                }
-            }
-            print.push(templist);
-            msg.channel.send('```' + print[0].join(', ') + '```')
-                .then(message => {
-                    if (print.length !== 1) {
-                        message.react("⬅");
-                        message.react("➡");
-                        listpage = 0;
-                    } else {
-                        listpage = -1;
-                    }
-                    recentlist = message.id;
-                }).catch();
-        } else {
-            if (args[1].indexOf('..') !== -1) {
-                msg.channel.send('개수작 부리지 마라');
-            } else {
-                try {
-                    conlist = fs.readdirSync('./image/' + args[1]);
-                    print = [];
-                    while (conlist.length !== 0) {
-                        temptoken = conlist.shift();
-                        if (printlength + temptoken.toString().length < MAX_LENGTH) {
-                            printlength += temptoken.toString().length + 2;
-                            templist.push(temptoken);
-                        } else {
-                            print.push(templist);
-                            templist = [];
-                            printlength = 6;
-                            printlength += temptoken.toString().length + 2;
-                            templist.push(temptoken);
-                        }
-                    }
-                    print.push(templist);
-                    msg.channel.send('```' + print[0].join(', ') + '```')
-                        .then(message => {
-                            if (print.length !== 1) {
-                                message.react("⬅");
-                                message.react("➡");
-                                listpage = 0;
-                            } else {
-                                listpage = -1;
-                            }
-                            recentlist = message.id;
-                        }).catch();
-                } catch (err) {
-                    msg.channel.send('그런 폴더 없는 데스웅');
-                }
-            }
+bot.on('message', msg => {
+    //봇이 하는 말이나 등록되지 않은 커맨드는 씹는다.
+    if (msg.author.bot) return;
+    if (msg.content.endsWith(suffix2)){
+        let args = msg.content.slice(0, msg.content.length - suffix2.length);
+        if (args.length === 0) return;
+        if (args.endsWith(' ')) {
+            args = args.slice(0, args.length - 1);
         }
-    } else {
-        let conlist = fs.readdirSync('./image');
-        if (conlist.indexOf(args[0]) !== -1) {
-            if (args.length === 1) {
-                msg.channel.send('뭘 보내라는 것이지');
-            } else {
-                conlist = fs.readdirSync('./image/' + args[0]);
-                let tgt = conlist.filter(con => {
-                    return con.toString().startsWith(args[1]);
-                });
-                if (tgt.length > 0) {
-                    for (let idx = 0; idx < tgt.length; idx++) {
-                        msg.channel.send({
-                            files: [{
-                                attachment: './image/' + args[0] + '/' + tgt[idx]
-                            }]
-                        });
-                    }
-                } else {
-                    msg.channel.send('그런 콘 없어요');
-                }
-            }
-        } else {
-            msg.channel.send('그런 콘 없어요.');
+        try {
+            commands.listup(msg, args);
+        }catch (error) {
+            console.error(error);
+            msg.channel.send('문제가 발생했다아아악 나죽는다아악');
         }
+    }
+    else if (msg.content.endsWith(suffix)) {
+        let args = msg.content.slice(0, msg.content.length - suffix.length);
+        if (args.length === 0) return;
+        args = args.split(' ');
+        commands.send_con(msg, args);
     }
 });
 
 bot.on('messageReactionAdd', (reaction, user) => {
-    if (reaction.message.id === recentlist && !user.bot) {
+    let recentlist = fs.readFileSync("./recentlist.json", (err, data) => {
+        if (err) throw err;
+        console.log(data);
+    });
+    recentlist = JSON.parse(recentlist);
+
+    if (!user.bot && reaction.message.id === recentlist.listid) {
         if (reaction.emoji.name === "⬅") {
-            if (listpage - 1 > -1) {
-                listpage--;
-                reaction.message.edit('```' + print[listpage].join(', ') + '```');
+            if (recentlist.page - 1 > -1) {
+                recentlist.page--;
+                reaction.message.edit('```' + recentlist.printlist[recentlist.page].join(', ') + '```');
             }
         } else if (reaction.emoji.name === "➡") {
-            if (listpage + 1 < print.length) {
-                listpage++;
-                reaction.message.edit('```' + print[listpage].join(', ') + '```');
+            if (recentlist.page + 1 < recentlist.printlist.length) {
+                recentlist.page++;
+                reaction.message.edit('```' + recentlist.printlist[recentlist.page].join(', ') + '```');
             }
         }
+
+        recentlist.listid = recentlist.listid;
+        recentlist.page = recentlist.page;
+        recentlist.printlist = recentlist.printlist;
+
+        fs.writeFile("./recentlist.json", JSON.stringify(recentlist, null, 4), (err) => {
+            if (err) {
+                console.error(err);
+                return;
+            }
+        });
     }
 });
+
 //로그인
 bot.login(token);
